@@ -3,29 +3,95 @@ import { updateProfile, logout } from '@/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
 export default async function ProfilePage() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase.from('profiles').select('*').eq('user_id', user!.id).single();
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground">
+              Vous devez être connecté pour accéder à votre profil.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+
+  /**
+   * Adapter updateProfile pour l'action native du formulaire.
+   *
+   * updateProfile attend actuellement :
+   * (prevState, formData)
+   *
+   * alors que form action attend :
+   * (formData)
+   */
+  async function handleUpdateProfile(formData: FormData) {
+    await updateProfile(null, formData);
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Mon profil</h1>
+      <h1 className="mb-6 text-3xl font-bold">
+        Mon profil
+      </h1>
 
       <Card className="mb-6">
-        <CardContent className="pt-6 flex items-center gap-4">
+        <CardContent className="flex items-center gap-4 pt-6">
           <Avatar className="h-16 w-16">
-            <AvatarImage src={profile?.avatar_url || undefined} />
-            <AvatarFallback className="text-lg">{profile?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+            <AvatarImage
+              src={profile?.avatar_url || undefined}
+              alt={profile?.full_name || 'Avatar'}
+            />
+
+            <AvatarFallback className="text-lg">
+              {profile?.full_name?.charAt(0)?.toUpperCase() || 'U'}
+            </AvatarFallback>
           </Avatar>
+
           <div>
-            <p className="font-semibold text-lg">{profile?.full_name || user?.email}</p>
-            <p className="text-sm text-muted-foreground">{user?.email}</p>
-            <Badge variant="secondary" className="mt-1">{profile?.role}</Badge>
+            <p className="text-lg font-semibold">
+              {profile?.full_name || user.email}
+            </p>
+
+            <p className="text-sm text-muted-foreground">
+              {user.email}
+            </p>
+
+            {profile?.role && (
+              <Badge
+                variant="secondary"
+                className="mt-1"
+              >
+                {profile.role}
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -34,19 +100,46 @@ export default async function ProfilePage() {
         <CardHeader>
           <CardTitle>Informations</CardTitle>
         </CardHeader>
+
         <CardContent className="space-y-4">
-          <form action={updateProfile} className="space-y-4">
+          <form
+            action={handleUpdateProfile}
+            className="space-y-4"
+          >
             <div className="space-y-2">
-              <Label htmlFor="full_name">Nom complet</Label>
-              <Input id="full_name" name="full_name" defaultValue={profile?.full_name || ''} required />
+              <Label htmlFor="full_name">
+                Nom complet
+              </Label>
+
+              <Input
+                id="full_name"
+                name="full_name"
+                defaultValue={profile?.full_name || ''}
+                required
+              />
             </div>
-            <Button type="submit" variant="bk">Mettre à jour</Button>
+
+            <Button
+              type="submit"
+              variant="bk"
+            >
+              Mettre à jour
+            </Button>
           </form>
         </CardContent>
       </Card>
 
-      <form action={logout} className="mt-6">
-        <Button type="submit" variant="destructive" className="w-full">Se déconnecter</Button>
+      <form
+        action={logout}
+        className="mt-6"
+      >
+        <Button
+          type="submit"
+          variant="destructive"
+          className="w-full"
+        >
+          Se déconnecter
+        </Button>
       </form>
     </div>
   );
