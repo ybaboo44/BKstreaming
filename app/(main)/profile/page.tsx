@@ -43,17 +43,12 @@ export default async function ProfilePage() {
     .eq('user_id', user.id)
     .single();
 
-  /**
-   * Adapter updateProfile pour l'action native du formulaire.
-   *
-   * updateProfile attend actuellement :
-   * (prevState, formData)
-   *
-   * alors que form action attend :
-   * (formData)
-   */
-  async function handleUpdateProfile(formData: FormData) {
+  async function handleUpdateProfile(formData: FormData): Promise<void> {
     await updateProfile(null, formData);
+  }
+
+  async function handleLogout(): Promise<void> {
+    await logout();
   }
 
   return (
@@ -130,7 +125,7 @@ export default async function ProfilePage() {
       </Card>
 
       <form
-        action={logout}
+        action={handleLogout}
         className="mt-6"
       >
         <Button
