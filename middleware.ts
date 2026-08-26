@@ -1,6 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: Record<string, unknown>;
+};
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -11,11 +17,8 @@ export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Évite un crash Edge si les variables Supabase ne sont pas présentes
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error(
-      "Missing Supabase environment variables in middleware."
-    );
+    console.error("Missing Supabase environment variables.");
 
     return response;
   }
@@ -29,7 +32,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
 
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
           });
@@ -41,16 +44,19 @@ export async function middleware(request: NextRequest) {
           });
 
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
+            response.cookies.set(
+              name,
+              value,
+              options as Parameters<
+                typeof response.cookies.set
+              >[2]
+            );
           });
         },
       },
     }
   );
 
-  /*
-   * Vérifie la session Supabase
-   */
   const {
     data: { user },
     error: userError,
@@ -134,7 +140,7 @@ export async function middleware(request: NextRequest) {
     }
 
     /*
-     * Vérification administrateur
+     * Vérification du rôle administrateur
      */
     const isAdmin =
       profile.role === "ADMIN" ||
@@ -150,9 +156,6 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-/*
- * Le middleware ne s'exécute pas sur les fichiers statiques
- */
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
