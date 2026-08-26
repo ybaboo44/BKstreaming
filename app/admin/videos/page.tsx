@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { Video, Plus, ExternalLink, Trash2 } from 'lucide-react';
+import { revalidatePath } from 'next/cache';
 
 export default async function AdminVideosPage() {
   const supabase = createClient();
@@ -13,6 +14,26 @@ export default async function AdminVideosPage() {
     .from('videos')
     .select('*, category:categories(*)')
     .order('created_at', { ascending: false });
+
+  async function handleDeleteVideo(id: string): Promise<void> {
+    'use server';
+
+    const result = await deleteVideo(id);
+
+    // Si ton ancienne action retourne une erreur,
+    // on la transforme en vraie erreur serveur.
+    if (
+      result &&
+      typeof result === 'object' &&
+      'error' in result &&
+      result.error
+    ) {
+      throw new Error(result.error);
+    }
+
+    revalidatePath('/admin/videos');
+    revalidatePath('/videos');
+  }
 
   return (
     <div className="space-y-6">
@@ -70,17 +91,17 @@ export default async function AdminVideosPage() {
                     key={video.id}
                     className="border-b border-white/5 hover:bg-white/5"
                   >
-                    {/* Title */}
+                    {/* Titre */}
                     <td className="px-4 py-3 font-medium">
                       {video.title}
                     </td>
 
-                    {/* Category */}
+                    {/* Catégorie */}
                     <td className="px-4 py-3">
                       {video.category?.name || '—'}
                     </td>
 
-                    {/* Status */}
+                    {/* Statut */}
                     <td className="px-4 py-3">
                       <Badge
                         variant={
@@ -95,14 +116,14 @@ export default async function AdminVideosPage() {
                       </Badge>
                     </td>
 
-                    {/* Access */}
+                    {/* Accès */}
                     <td className="px-4 py-3">
                       <Badge variant="outline">
                         {video.access_type}
                       </Badge>
                     </td>
 
-                    {/* Views */}
+                    {/* Vues */}
                     <td className="px-4 py-3">
                       {video.views ?? 0}
                     </td>
@@ -110,7 +131,7 @@ export default async function AdminVideosPage() {
                     {/* Actions */}
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-2">
-                        {/* View */}
+                        {/* Voir */}
                         <Link
                           href={`/videos/${video.slug}`}
                           target="_blank"
@@ -126,10 +147,8 @@ export default async function AdminVideosPage() {
                           </Button>
                         </Link>
 
-                        {/* Delete */}
-                        <form
-                          action={deleteVideo.bind(null, video.id)}
-                        >
+                        {/* Supprimer */}
+                        <form action={handleDeleteVideo.bind(null, video.id)}>
                           <Button
                             type="submit"
                             size="icon"
@@ -145,7 +164,7 @@ export default async function AdminVideosPage() {
                   </tr>
                 ))}
 
-                {/* Empty state */}
+                {/* Aucun résultat */}
                 {(!videos || videos.length === 0) && (
                   <tr>
                     <td
