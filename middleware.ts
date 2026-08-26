@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient } from "@supabase/ssr";
+import { type NextRequest, NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -8,10 +8,21 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // Créer le client Supabase compatible Edge/Middleware
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Évite un crash Edge si les variables Supabase ne sont pas présentes
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error(
+      "Missing Supabase environment variables in middleware."
+    );
+
+    return response;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -37,8 +48,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // IMPORTANT :
-  // getUser() vérifie réellement la session auprès de Supabase.
+  /*
+   * Vérifie la session Supabase
+   */
   const {
     data: { user },
     error: userError,
@@ -46,98 +58,91 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // ============================================================
-  // ROUTES PUBLIQUES
-  // ============================================================
-
+  /*
+   * Routes publiques
+   */
   const publicRoutes = [
-    '/',
-    '/login',
-    '/register',
-    '/forgot-password',
-    '/reset-password',
+    "/",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
   ];
 
   const isPublicRoute =
     publicRoutes.includes(pathname) ||
-    pathname.startsWith('/api/auth');
+    pathname.startsWith("/api/auth");
 
-  // Les fichiers Next.js / assets ne doivent pas être traités
-  if (
-    pathname.startsWith('/_next') ||
-    pathname === '/favicon.ico' ||
-    pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$/)
-  ) {
-    return response;
-  }
-
-  // ============================================================
-  // UTILISATEUR NON CONNECTÉ
-  // ============================================================
-
+  /*
+   * Utilisateur non connecté
+   */
   if (!user || userError) {
     if (isPublicRoute) {
       return response;
     }
 
     return NextResponse.redirect(
-      new URL('/login', request.url)
+      new URL("/login", request.url)
     );
   }
 
-  // ============================================================
-  // UTILISATEUR CONNECTÉ
-  // ============================================================
-
-  // Si l'utilisateur connecté essaie d'aller sur login/register
+  /*
+   * Utilisateur connecté :
+   * empêcher l'accès aux pages d'authentification
+   */
   if (
-    pathname === '/login' ||
-    pathname === '/register' ||
-    pathname === '/forgot-password'
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/forgot-password"
   ) {
     return NextResponse.redirect(
-      new URL('/dashboard', request.url)
+      new URL("/dashboard", request.url)
     );
   }
 
-  // ============================================================
-  // ROUTES ADMIN
-  // ============================================================
-
-  if (pathname.startsWith('/admin')) {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role, status')
-      .eq('user_id', user.id)
+  /*
+   * Protection de /admin
+   */
+  if (pathname.startsWith("/admin")) {
+    const {
+      data: profile,
+      error: profileError,
+    } = await supabase
+      .from("profiles")
+      .select("role, status")
+      .eq("user_id", user.id)
       .maybeSingle();
 
-    // Si erreur ou profil inexistant
     if (profileError || !profile) {
       console.error(
-        'Middleware profile error:',
+        "Middleware profile error:",
         profileError?.message
       );
 
       return NextResponse.redirect(
-        new URL('/dashboard', request.url)
+        new URL("/dashboard", request.url)
       );
     }
 
-    // Compte suspendu
-    if (profile.status === 'SUSPENDED') {
+    /*
+     * Compte suspendu
+     */
+    if (profile.status === "SUSPENDED") {
       return NextResponse.redirect(
-        new URL('/login?error=suspended', request.url)
+        new URL("/login?error=suspended", request.url)
       );
     }
 
-    // Vérification rôle administrateur
+    /*
+     * Vérification administrateur
+     */
     const isAdmin =
-      profile.role === 'ADMIN' ||
-      profile.role === 'SUPER_ADMIN';
+      profile.role === "ADMIN" ||
+      profile.role === "SUPER_ADMIN";
 
     if (!isAdmin) {
       return NextResponse.redirect(
-        new URL('/dashboard', request.url)
+        new URL("/dashboard", request.url)
       );
     }
   }
@@ -145,16 +150,11 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+/*
+ * Le middleware ne s'exécute pas sur les fichiers statiques
+ */
 export const config = {
   matcher: [
-    /*
-     * Intercepter les pages mais ignorer :
-     * - _next/static
-     * - _next/image
-     * - favicon
-     * - images
-     * - fichiers statiques
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)',
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map)$).*)",
   ],
 };
